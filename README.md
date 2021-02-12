@@ -3,5 +3,7 @@
 
 # Credits
 https://github.com/Ultz/Silk.NET
+
 https://github.com/ThomasMiz/TrippyGL
+
 https://github.com/rds1983/Myra
