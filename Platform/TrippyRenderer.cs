@@ -6,7 +6,7 @@ using TrippyGL;
 
 namespace Myra.Samples.AllWidgets
 {
-	internal class TrippyRenderer: IMyraRenderer
+	internal class TrippyRenderer: IMyraRenderer, IDisposable
 	{
 		private bool _beginCalled;
 		
@@ -15,26 +15,33 @@ namespace Myra.Samples.AllWidgets
 		private readonly TextureBatcher _batch;
 
 		private Matrix3x2? _transform;
+
+		private DepthState _oldDepthState;
+		private bool _oldFaceCullingEnabled;
+		private BlendState _oldBlendState;
 		private bool _oldScissorEnabled;
+		private Rectangle _scissorRectangle;
 
 		public Rectangle Scissor
 		{
 			get
 			{
-				var rect = _device.ScissorRectangle;
-
-				rect.X -= _device.Viewport.X;
-				rect.Y -= _device.Viewport.Y;
-
-				return rect.ToSystemDrawing();
+				return _scissorRectangle;
 			}
 
 			set
 			{
 				Flush();
+
 				value.X += _device.Viewport.X;
 				value.Y += _device.Viewport.Y;
-				_device.ScissorRectangle = value.ToTrippy();
+
+				// TripplyGL Scissor Rect has y-axis facing upwards
+				// Hence we require some transforms
+				var result = new Viewport(value.X, (int)(_device.Viewport.Height - value.Height - value.Y), (uint)value.Width, (uint)value.Height);
+				_device.ScissorRectangle = result;
+
+				_scissorRectangle = value;
 			}
 		}
 
@@ -56,8 +63,14 @@ namespace Myra.Samples.AllWidgets
 			AllWidgetsTest.Instance.SizeChanged += Instance_SizeChanged;
 		}
 
+		public void Dispose()
+		{
+			AllWidgetsTest.Instance.SizeChanged -= Instance_SizeChanged;
+		}
+
 		private void Instance_SizeChanged(object sender, EventArgs e)
 		{
+			UpdateProjection();
 		}
 
 		private void UpdateProjection()
@@ -67,10 +80,19 @@ namespace Myra.Samples.AllWidgets
 
 		public void Begin(Matrix3x2? transform)
 		{
-			_batch.Begin();
-
+			// Save old state
+			_oldDepthState = _device.DepthState;
+			_oldFaceCullingEnabled = _device.FaceCullingEnabled;
+			_oldBlendState = _device.BlendState;
 			_oldScissorEnabled = _device.ScissorTestEnabled;
-//			_device.ScissorTestEnabled = true;
+
+			// Set new state
+			_device.DepthState = DepthState.None;
+			_device.FaceCullingEnabled = false;
+			_device.BlendState = BlendState.AlphaBlend;
+			_device.ScissorTestEnabled = true;
+
+			_batch.Begin();
 
 			_beginCalled = true;
 			_transform = transform;
@@ -81,18 +103,18 @@ namespace Myra.Samples.AllWidgets
 			_batch.End();
 			_beginCalled = false;
 
-			_device.DepthState = DepthState.None;
-			_device.FaceCullingEnabled = false;
-			_device.BlendState = BlendState.AlphaBlend;
-			//			_device.ScissorTestEnabled = _oldScissorEnabled;
-
+			// Restore old state
+			_device.DepthState = _oldDepthState;
+			_device.FaceCullingEnabled = _oldFaceCullingEnabled;
+			_device.BlendState = _oldBlendState;
+			_device.ScissorTestEnabled = _oldScissorEnabled;
 		}
 
 		public void Draw(object texture, Vector2 position, Rectangle? sourceRectangle, Color color, float rotation, Vector2 origin, Vector2 scale, float depth)
 		{
-			var xnaTexture = (Texture2D)texture;
+			var tex = (Texture2D)texture;
 
-			_batch.Draw(xnaTexture,
+			_batch.Draw(tex,
 				position,
 				sourceRectangle,
 				color.ToTrippy(),
@@ -104,14 +126,14 @@ namespace Myra.Samples.AllWidgets
 
 		public void Draw(object texture, Rectangle dest, Rectangle? src, Color color)
 		{
-			var xnaTexture = (Texture2D)texture;
+			var tex = (Texture2D)texture;
 
-			Vector2 srcSize = src != null ? new Vector2(src.Value.Width, src.Value.Height) : new Vector2(xnaTexture.Width, xnaTexture.Height);
+			Vector2 srcSize = src != null ? new Vector2(src.Value.Width, src.Value.Height) : new Vector2(tex.Width, tex.Height);
 
 			Vector2 scale = new Vector2(dest.Width / srcSize.X,
 				dest.Height / srcSize.Y);
 
-			_batch.Draw(xnaTexture,
+			_batch.Draw(tex,
 				new Vector2(dest.X, dest.Y),
 				src,
 				color.ToTrippy(),
