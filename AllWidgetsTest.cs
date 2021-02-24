@@ -1,9 +1,9 @@
 ﻿using Myra.Graphics2D.UI;
 using Myra.Platform;
-using Silk.NET.OpenGL;
+using Silk.NET.Maths;
 using System;
-using System.Drawing;
 using System.Numerics;
+using TrippyGL;
 
 namespace Myra.Samples.AllWidgets
 {
@@ -95,15 +95,13 @@ namespace Myra.Samples.AllWidgets
 
 		protected override void OnRender(double dt)
 		{
-			graphicsDevice.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.DepthBufferBit);
+			graphicsDevice.Clear(ClearBuffers.Color | ClearBuffers.Depth | ClearBuffers.Stencil);
 			_desktop.Render();
-
-			Window.SwapBuffers();
 		}
 
-		protected override void OnResized(Size size)
+		protected override void OnResized(Vector2D<int> size)
 		{
-			graphicsDevice.SetViewport(0, 0, (uint)size.Width, (uint)size.Height);
+			graphicsDevice.SetViewport(0, 0, (uint)size.X, (uint)size.Y);
 
 			SizeChanged?.Invoke(this, EventArgs.Empty);
 		}

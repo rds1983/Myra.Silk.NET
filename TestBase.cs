@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Drawing;
+using System.Numerics;
 using Silk.NET.Input;
-using Silk.NET.Input.Common;
-using Silk.NET.OpenGL;
+using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using Silk.NET.Windowing.Common;
 using TrippyGL;
 
 namespace Myra.Samples.AllWidgets
@@ -23,8 +21,8 @@ namespace Myra.Samples.AllWidgets
 		/// <summary>Whether to allow the user to toggle fullscreen mode by pressing F11.</summary>
 		public bool AllowToggleFullscreen = true;
 
-		private Size preFullscreenSize;
-		private Point preFullscreenPosition;
+		private Vector2D<int> preFullscreenSize;
+		private Vector2D<int> preFullscreenPosition;
 		private WindowState preFullscreenState;
 
 		/// <summary>Gets or sets whether the window is currently on fullscreen mode.</summary>
@@ -36,14 +34,14 @@ namespace Myra.Samples.AllWidgets
 				if (value == IsFullscreen)
 					return;
 
+				IMonitor? windowMonitor = Window.Monitor;
+				if (windowMonitor == null)
+					throw new Exception("Failed to switch to fullscreen: This window isn't on any monitor!");
+
 				Window.Resize -= OnResized;
 				if (value)
 				{
-					Size screenSize;
-					if (Window.Monitor.VideoMode.Resolution.HasValue)
-						screenSize = Window.Monitor.VideoMode.Resolution.Value;
-					else
-						screenSize = new Size(Window.Monitor.Bounds.Width, Window.Monitor.Bounds.Height);
+					Vector2D<int> screenSize = windowMonitor.VideoMode.Resolution ?? windowMonitor.Bounds.Origin;
 					preFullscreenSize = Window.Size;
 					preFullscreenPosition = Window.Position;
 					preFullscreenState = Window.WindowState;
@@ -52,10 +50,10 @@ namespace Myra.Samples.AllWidgets
 				}
 				else
 				{
-					if (preFullscreenSize.Width < 10 || preFullscreenSize.Height < 10)
+					if (preFullscreenSize.X < 10 || preFullscreenSize.Y < 10 || preFullscreenState == WindowState.Fullscreen)
 					{
-						preFullscreenSize = GetNewWindowSize(Window.Monitor);
-						preFullscreenPosition = new Point(Window.Monitor.Bounds.X + 50, Window.Monitor.Bounds.Y + 50);
+						preFullscreenSize = GetNewWindowSize(windowMonitor);
+						preFullscreenPosition = windowMonitor.Bounds.Origin + new Vector2D<int>(50);
 						preFullscreenState = WindowState.Normal;
 					}
 
@@ -72,27 +70,26 @@ namespace Myra.Samples.AllWidgets
 		/// <summary>The <see cref="GraphicsDevice"/> whose drawing commands go to the application's window.</summary>
 		public GraphicsDevice graphicsDevice;
 
-		public TestBase(string title = null, int preferredDepthBufferBits = 0, bool isSingleThreaded = true)
+		public TestBase(string? title = null, int preferredDepthBufferBits = 0)
 		{
 			title ??= System.Reflection.Assembly.GetEntryAssembly()?.GetName()?.Name ?? "Title";
 			Console.WriteLine("Starting up: \"" + title + "\"...");
 
-			IMonitor mainMonitor = Monitor.GetMainMonitor();
-			Size windowSize = GetNewWindowSize(mainMonitor);
+			IMonitor mainMonitor = Monitor.GetMainMonitor(null);
+			Vector2D<int> windowSize = GetNewWindowSize(mainMonitor);
 			WindowOptions windowOpts = new WindowOptions()
 			{
 				API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Debug, new APIVersion(3, 3)),
-				VSync = VSyncMode.On,
+				VSync = false,
 				UpdatesPerSecond = 60,
 				FramesPerSecond = 60,
-				UseSingleThreadedWindow = isSingleThreaded,
-				RunningSlowTolerance = 30,
 				Size = windowSize,
 				VideoMode = new VideoMode(windowSize),
 				PreferredDepthBufferBits = preferredDepthBufferBits,
-				ShouldSwapAutomatically = false,
+				ShouldSwapAutomatically = true,
 				Title = title,
-				Position = new Point(mainMonitor.Bounds.X + 50, mainMonitor.Bounds.Y + 50)
+				Position = mainMonitor.Bounds.Origin + new Vector2D<int>(50),
+				IsVisible = true
 			};
 
 			Window = Silk.NET.Windowing.Window.Create(windowOpts);
@@ -162,7 +159,7 @@ namespace Myra.Samples.AllWidgets
 			foreach (IGamepad gamepad in InputContext.Gamepads)
 				OnInputContextConnectionChanged(gamepad, gamepad.IsConnected);
 
-			graphicsDevice = new GraphicsDevice(GL.GetApi(Window))
+			graphicsDevice = new GraphicsDevice(Silk.NET.OpenGL.GL.GetApi(Window))
 			{
 				DebugMessagingEnabled = true
 			};
@@ -239,11 +236,10 @@ namespace Myra.Samples.AllWidgets
 		{
 			if (key == Key.F11 && AllowToggleFullscreen)
 				IsFullscreen = !IsFullscreen;
-
-			if (key == Key.Escape)
+			else if (key == Key.Escape)
 				Window.Close();
-
-			OnKeyDown(sender, key, n);
+			else
+				OnKeyDown(sender, key, n);
 		}
 
 		private void Window_Render(double dt)
@@ -260,13 +256,13 @@ namespace Myra.Samples.AllWidgets
 
 		protected abstract void OnLoad();
 		protected abstract void OnRender(double dt);
-		protected abstract void OnResized(Size size);
+		protected abstract void OnResized(Vector2D<int> size);
 		protected abstract void OnUnload();
 
 		protected virtual void OnUpdate(double dt)
 		{
-			GLEnum c;
-			while ((c = graphicsDevice.GL.GetError()) != GLEnum.NoError)
+			Silk.NET.OpenGL.GLEnum c;
+			while ((c = graphicsDevice.GL.GetError()) != Silk.NET.OpenGL.GLEnum.NoError)
 			{
 				Console.WriteLine("GL Error found: " + c);
 			}
@@ -277,7 +273,7 @@ namespace Myra.Samples.AllWidgets
 		protected virtual void OnKeyChar(IKeyboard sender, char key) { }
 
 		protected virtual void OnMouseDown(IMouse sender, MouseButton button) { }
-		protected virtual void OnMouseMove(IMouse sender, PointF position) { }
+		protected virtual void OnMouseMove(IMouse sender, Vector2 position) { }
 		protected virtual void OnMouseUp(IMouse sender, MouseButton button) { }
 		protected virtual void OnMouseScroll(IMouse sender, ScrollWheel scroll) { }
 
@@ -349,14 +345,9 @@ namespace Myra.Samples.AllWidgets
 		/// Calculates the size to use for a new window as two thirds the size of the main monitor.
 		/// </summary>
 		/// <param name="monitor">The monitor in which the window will be located.</param>
-		private static Size GetNewWindowSize(IMonitor monitor)
+		private static Vector2D<int> GetNewWindowSize(IMonitor monitor)
 		{
-			if (monitor.VideoMode.Resolution.HasValue)
-			{
-				Size s = monitor.VideoMode.Resolution.Value;
-				return new Size(s.Width * 2 / 3, s.Height * 2 / 3);
-			}
-			return new Size(monitor.Bounds.Width * 2 / 3, monitor.Bounds.Height * 2 / 3);
+			return (monitor.VideoMode.Resolution ?? monitor.Bounds.Origin) * 2 / 3;
 		}
 
 		private static void OnDebugMessage(DebugSource debugSource, DebugType debugType, int messageId, DebugSeverity debugSeverity, string message)

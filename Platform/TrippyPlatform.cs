@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using Myra.Graphics2D.UI;
 using Myra.Platform;
-using Silk.NET.Input.Common;
+using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using TrippyGL;
 

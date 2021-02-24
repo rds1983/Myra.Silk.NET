@@ -10,9 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="Myra.PlatformAgnostic" Version="1.2.2" />
-    <PackageReference Include="TrippyGL" Version="1.0.0-rc2" />
-    <PackageReference Include="Silk.NET.OpenGL" Version="1.8.0" />
-    <PackageReference Include="Silk.NET.Input" Version="1.8.0" />
-    <PackageReference Include="Silk.NET.Windowing" Version="1.8.0" />
+    <PackageReference Include="TrippyGL" Version="1.0.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.1.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.1.0" />
   </ItemGroup>
 </Project>
